@@ -1,0 +1,48 @@
+source "drivers/media/video/tegra/avp/Kconfig"
+
+config TEGRA_CAMERA
+        bool "Enable support for tegra camera/isp hardware"
+        depends on ARCH_TEGRA
+        default y
+        help
+          Enables support for the Tegra camera interface
+
+          If unsure, say Y
+
+config VIDEO_OV5650
+        tristate "OV5650 camera sensor support"
+        depends on I2C && ARCH_TEGRA
+        ---help---
+          This is a driver for the Omnivision OV5650 5MP camera sensor
+          for use with the tegra isp.
+
+config VIDEO_OV2710
+        tristate "OV2710 camera sensor support"
+        depends on I2C && ARCH_TEGRA
+        ---help---
+          This is a driver for the Omnivision OV2710 camera sensor
+          for use with the tegra isp.
+
+config VIDEO_YUV
+        tristate "YUV camera sensor support"
+        depends on I2C && ARCH_TEGRA
+        ---help---
+          This is a template driver for all YUV camera sensor
+
+config VIDEO_YUV_OV5640
+        tristate "OV5640 YUV camera sensor support"
+        depends on I2C && ARCH_TEGRA
+        ---help---
+          This is a driver for OV5640 YUV camera sensor
+
+config VIDEO_YUV_MI1040
+        tristate "MI1040 YUV camera sensor support"
+        depends on I2C && ARCH_TEGRA
+        ---help---
+          This is a driver for MI1040 YUV camera sensor
+
+config VIDEO_YUV_MI5140
+        tristate "MI5140 YUV camera sensor support"
+        depends on I2C && ARCH_TEGRA
+        ---help---
+          This is a driver for MI5140 YUV camera sensor
