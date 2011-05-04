@@ -2519,18 +2519,18 @@ SND_SOC_DAPM_SUPPLY("DSPINTCLK", WM8994_CLOCKING_1, 1, 0, NULL, 0),
 SND_SOC_DAPM_SUPPLY("AIF1CLK", WM8994_AIF1_CLOCKING_1, 0, 0, NULL, 0),
 SND_SOC_DAPM_SUPPLY("AIF2CLK", WM8994_AIF2_CLOCKING_1, 0, 0, NULL, 0),
 
-SND_SOC_DAPM_AIF_OUT("AIF1ADC1L", "AIF1 Capture",
+SND_SOC_DAPM_AIF_OUT("AIF1ADC1L", NULL,
 		     0, WM8994_POWER_MANAGEMENT_4, 9, 0),
-SND_SOC_DAPM_AIF_OUT("AIF1ADC1R", "AIF1 Capture",
+SND_SOC_DAPM_AIF_OUT("AIF1ADC1R", NULL,
 		     0, WM8994_POWER_MANAGEMENT_4, 8, 0),
 SND_SOC_DAPM_AIF_IN("AIF1DAC1L", NULL, 0,
 		    WM8994_POWER_MANAGEMENT_5, 9, 0),
 SND_SOC_DAPM_AIF_IN("AIF1DAC1R", NULL, 0,
 		    WM8994_POWER_MANAGEMENT_5, 8, 0),
 
-SND_SOC_DAPM_AIF_OUT("AIF1ADC2L", "AIF1 Capture",
+SND_SOC_DAPM_AIF_OUT("AIF1ADC2L", NULL,
 		     0, WM8994_POWER_MANAGEMENT_4, 11, 0),
-SND_SOC_DAPM_AIF_OUT("AIF1ADC2R", "AIF1 Capture",
+SND_SOC_DAPM_AIF_OUT("AIF1ADC2R", NULL,
 		     0, WM8994_POWER_MANAGEMENT_4, 10, 0),
 SND_SOC_DAPM_AIF_IN("AIF1DAC2L", NULL, 0,
 		    WM8994_POWER_MANAGEMENT_5, 11, 0),
@@ -2571,6 +2571,7 @@ SND_SOC_DAPM_AIF_IN("AIF2DACR", NULL, 0,
 
 SND_SOC_DAPM_AIF_IN("AIF1DACDAT", "AIF1 Playback", 0, SND_SOC_NOPM, 0, 0),
 SND_SOC_DAPM_AIF_IN("AIF2DACDAT", "AIF2 Playback", 0, SND_SOC_NOPM, 0, 0),
+SND_SOC_DAPM_AIF_OUT("AIF1ADCDAT", "AIF1 Capture", 0, SND_SOC_NOPM, 0, 0),
 SND_SOC_DAPM_AIF_OUT("AIF2ADCDAT", "AIF2 Capture", 0, SND_SOC_NOPM, 0, 0),
 
 SND_SOC_DAPM_MUX("AIF1DAC Mux", SND_SOC_NOPM, 0, 0, &aif1dac_mux),
@@ -2766,6 +2767,11 @@ static const struct snd_soc_dapm_route intercon[] = {
 	{ "AIF2DAC2R Mixer", "Left Sidetone Switch", "Left Sidetone" },
 	{ "AIF2DAC2R Mixer", "Right Sidetone Switch", "Right Sidetone" },
 
+	{ "AIF1ADCDAT", NULL, "AIF1ADC1L" },
+	{ "AIF1ADCDAT", NULL, "AIF1ADC1R" },
+	{ "AIF1ADCDAT", NULL, "AIF1ADC2L" },
+	{ "AIF1ADCDAT", NULL, "AIF1ADC2R" },
+
 	{ "AIF2ADCDAT", NULL, "AIF2ADC Mux" },
 
 	/* AIF3 output */
@@ -2914,6 +2920,7 @@ static int wm8994_set_fll(struct snd_soc_dai *dai, int id, int src,
 		/* Allow no source specification when stopping */
 		if (freq_out)
 			return -EINVAL;
+		src = wm8994->fll[id].src;
 		break;
 	case WM8994_FLL_SRC_MCLK1:
 	case WM8994_FLL_SRC_MCLK2:
@@ -3485,7 +3492,7 @@ static int wm8994_set_tristate(struct snd_soc_dai *codec_dai, int tristate)
 	else
 		val = 0;
 
-	return snd_soc_update_bits(codec, reg, mask, reg);
+	return snd_soc_update_bits(codec, reg, mask, val);
 }
 
 #define WM8994_RATES SNDRV_PCM_RATE_8000_96000

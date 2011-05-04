@@ -313,7 +313,6 @@ static bool radeon_atom_apply_quirks(struct drm_device *dev,
 				     uint16_t *line_mux,
 				     struct radeon_hpd *hpd)
 {
-	struct radeon_device *rdev = dev->dev_private;
 
 	/* Asus M2A-VM HDMI board lists the DVI port as HDMI */
 	if ((dev->pdev->device == 0x791e) &&
@@ -388,6 +387,13 @@ static bool radeon_atom_apply_quirks(struct drm_device *dev,
 			*line_mux = 0x90;
 	}
 
+	/* mac rv630, rv730, others */
+	if ((supported_device == ATOM_DEVICE_TV1_SUPPORT) &&
+	    (*connector_type == DRM_MODE_CONNECTOR_DVII)) {
+		*connector_type = DRM_MODE_CONNECTOR_9PinDIN;
+		*line_mux = CONNECTOR_7PIN_DIN_ENUM_ID1;
+	}
+
 	/* ASUS HD 3600 XT board lists the DVI port as HDMI */
 	if ((dev->pdev->device == 0x9598) &&
 	    (dev->pdev->subsystem_vendor == 0x1043) &&
@@ -425,21 +431,23 @@ static bool radeon_atom_apply_quirks(struct drm_device *dev,
 		}
 	}
 
-	/* Acer laptop reports DVI-D as DVI-I and hpd pins reversed */
+	/* Acer laptop (Acer TravelMate 5730G) has an HDMI port
+	 * on the laptop and a DVI port on the docking station and
+	 * both share the same encoder, hpd pin, and ddc line.
+	 * So while the bios table is technically correct,
+	 * we drop the DVI port here since xrandr has no concept of
+	 * encoders and will try and drive both connectors
+	 * with different crtcs which isn't possible on the hardware
+	 * side and leaves no crtcs for LVDS or VGA.
+	 */
 	if ((dev->pdev->device == 0x95c4) &&
 	    (dev->pdev->subsystem_vendor == 0x1025) &&
 	    (dev->pdev->subsystem_device == 0x013c)) {
-		struct radeon_gpio_rec gpio;
-
 		if ((*connector_type == DRM_MODE_CONNECTOR_DVII) &&
 		    (supported_device == ATOM_DEVICE_DFP1_SUPPORT)) {
-			gpio = radeon_lookup_gpio(rdev, 6);
-			*hpd = radeon_atom_get_hpd_info_from_gpio(rdev, &gpio);
+			/* actually it's a DVI-D port not DVI-I */
 			*connector_type = DRM_MODE_CONNECTOR_DVID;
-		} else if ((*connector_type == DRM_MODE_CONNECTOR_HDMIA) &&
-			   (supported_device == ATOM_DEVICE_DFP1_SUPPORT)) {
-			gpio = radeon_lookup_gpio(rdev, 7);
-			*hpd = radeon_atom_get_hpd_info_from_gpio(rdev, &gpio);
+			return false;
 		}
 	}
 
@@ -2295,7 +2303,7 @@ void radeon_atom_initialize_bios_scratch_regs(struct drm_device *dev)
 	bios_2_scratch &= ~ATOM_S2_VRI_BRIGHT_ENABLE;
 
 	/* tell the bios not to handle mode switching */
-	bios_6_scratch |= (ATOM_S6_ACC_BLOCK_DISPLAY_SWITCH | ATOM_S6_ACC_MODE);
+	bios_6_scratch |= ATOM_S6_ACC_BLOCK_DISPLAY_SWITCH;
 
 	if (rdev->family >= CHIP_R600) {
 		WREG32(R600_BIOS_2_SCRATCH, bios_2_scratch);
@@ -2346,10 +2354,13 @@ void radeon_atom_output_lock(struct drm_encoder *encoder, bool lock)
 	else
 		bios_6_scratch = RREG32(RADEON_BIOS_6_SCRATCH);
 
-	if (lock)
+	if (lock) {
 		bios_6_scratch |= ATOM_S6_CRITICAL_STATE;
-	else
+		bios_6_scratch &= ~ATOM_S6_ACC_MODE;
+	} else {
 		bios_6_scratch &= ~ATOM_S6_CRITICAL_STATE;
+		bios_6_scratch |= ATOM_S6_ACC_MODE;
+	}
 
 	if (rdev->family >= CHIP_R600)
 		WREG32(R600_BIOS_6_SCRATCH, bios_6_scratch);
