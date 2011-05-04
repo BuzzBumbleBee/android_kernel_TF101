@@ -25,22 +25,12 @@
 #include <linux/irq.h>
 #include <linux/usb/otg.h>
 #include <mach/usb_phy.h>
-#include <mach/iomap.h>
 
 #define TEGRA_USB_USBCMD_REG_OFFSET		0x140
 #define TEGRA_USB_USBCMD_RESET			(1 << 1)
 #define TEGRA_USB_USBMODE_REG_OFFSET		0x1a8
 #define TEGRA_USB_USBMODE_HOST			(3 << 0)
 #define TEGRA_USB_PORTSC1_PTC(x)		(((x) & 0xf) << 16)
-#define TEGRA_USB_PORTSC_PHCD			(1 << 23)
-
-#define TEGRA_USB_SUSP_CTRL_OFFSET		0x400
-#define TEGRA_USB_SUSP_CLR			(1 << 5)
-#define TEGRA_USB_PHY_CLK_VALID			(1 << 7)
-#define TEGRA_USB_SRT				(1 << 25)
-
-#define TEGRA_LVL2_CLK_GATE_OVRB		0xfc
-#define TEGRA_USB2_CLK_OVR_ON			(1 << 10)
 
 #define TEGRA_USB_DMA_ALIGN 32
 
@@ -317,7 +307,7 @@ static int tegra_usb_suspend(struct usb_hcd *hcd)
 	unsigned long flags;
 	int hsic = 0;
 	struct tegra_ulpi_config *config;
-
+	printk("tegra_usb_suspend+\n");
 	if (tegra->phy->instance == 1) {
 		config = tegra->phy->config;
 		hsic = (config->inf_type == TEGRA_USB_UHSIC);
@@ -327,7 +317,7 @@ static int tegra_usb_suspend(struct usb_hcd *hcd)
 
 	context->port_speed = (readl(&hw->port_status[0]) >> 26) & 0x3;
 
-	if ((context->port_speed > TEGRA_USB_PHY_PORT_HIGH) || hsic) {
+	if ((context->port_speed > TEGRA_USB_PHY_PORT_HIGH) || hsic || (tegra->phy->instance == 2)) {
 		/* If no device connection or invalid speeds,
 		 * don't save the context */
 		context->valid = false;
@@ -352,6 +342,7 @@ static int tegra_usb_suspend(struct usb_hcd *hcd)
 		printk(KERN_INFO"asusec suspend\n");
 		asusec_suspend_hub_callback();
 	}
+	printk("tegra_usb_suspend-\n");
 	return 0;
 }
 
@@ -366,6 +357,7 @@ static int tegra_usb_resume(struct usb_hcd *hcd)
 	int hsic = 0;
 	struct tegra_ulpi_config *config;
 
+	printk("tegra_usb_resume+\n");
 	if (tegra->phy->instance == 1) {
 		config = tegra->phy->config;
 		hsic = (config->inf_type == TEGRA_USB_UHSIC);
@@ -457,7 +449,7 @@ static int tegra_usb_resume(struct usb_hcd *hcd)
 	}
 
 	tegra_ehci_phy_restore_end(tegra->phy);
-
+	printk("tegra_usb_resume-\n");
 	return 0;
 
 restart:
@@ -475,7 +467,7 @@ restart:
 	} else {
 		tegra_ehci_restart(hcd);
 	}
-
+	printk("tegra_usb_resume-\n");
 	return 0;
 }
 
@@ -691,9 +683,10 @@ static void tegra_hsic_connection_work(struct work_struct *work)
 	return;
 }
 
+
+
 #ifdef CONFIG_USB_EHCI_ONOFF_FEATURE
-/* Stored ehci handle for hsic insatnce */
-struct usb_hcd *ehci_handle;
+struct usb_hcd *ehci_handle; /* For ehci on/off sysfs */
 int ehci_tegra_irq;
 
 static ssize_t show_ehci_power(struct device *dev,
@@ -702,6 +695,7 @@ static ssize_t show_ehci_power(struct device *dev,
 {
 	return sprintf(buf, "EHCI Power %s\n", (ehci_handle) ? "on" : "off");
 }
+
 static ssize_t store_ehci_power(struct device *dev,
 		struct device_attribute *attr,
 		const char *buf, size_t count)
@@ -745,88 +739,6 @@ static inline void remove_ehci_sys_file(struct ehci_hcd *ehci)
 	device_remove_file(ehci_to_hcd(ehci)->self.controller,
 						&dev_attr_ehci_power);
 }
-
-static int ehci_tegra_wait_register(void __iomem *reg, u32 mask, u32 result)
-{
-	unsigned long timeout = 50000;
-
-	do {
-		if ((readl(reg) & mask) == result)
-			return 0;
-		udelay(1);
-		timeout--;
-	} while (timeout);
-	return -1;
-}
-
-
-void tegra_ehci_recover_rx_error(void)
-{
-	struct ehci_hcd *ehci;
-	unsigned long val;
-	struct usb_hcd *hcd = ehci_handle;
-
-	if (hcd) {
-		ehci  = hcd_to_ehci(ehci_handle);
-		pr_info("{ RX_ERR_HANDLING_START \n");
-		/* (0) set CLK_RST_..._LVL2_CLK_GATE_OVRB_0  USB2_CLK_OVR_ON = 1 */
-		val = readl((IO_ADDRESS(TEGRA_CLK_RESET_BASE) + TEGRA_LVL2_CLK_GATE_OVRB));
-		val |= TEGRA_USB2_CLK_OVR_ON;
-		writel(val, (IO_ADDRESS(TEGRA_CLK_RESET_BASE) + TEGRA_LVL2_CLK_GATE_OVRB));
-		/* (1) set PORTSC SUSP = 1 */
-		val = ehci_readl(ehci, &ehci->regs->port_status[0]);
-		ehci_writel(ehci, val | PORT_SUSPEND, &ehci->regs->port_status[0]);
-		/* (2) wait until PORTSC SUSP = 1 */
-		if (handshake(ehci, &ehci->regs->port_status[0], PORT_SUSPEND,
-							PORT_SUSPEND, 5000)) {
-			pr_err("%s: timeout waiting for PORT_SUSPEND = 1\n", __func__);
-			return;
-		}
-		/* (3) set PORTSC PHCD = 1 */
-		val = ehci_readl(ehci, &ehci->regs->port_status[0]);
-		ehci_writel(ehci, val | TEGRA_USB_PORTSC_PHCD, &ehci->regs->port_status[0]);
-		/* (4) wait until SUSP_CTRL PHY_VALID = 0 */
-		if (ehci_tegra_wait_register(hcd->regs + TEGRA_USB_SUSP_CTRL_OFFSET,
-				TEGRA_USB_PHY_CLK_VALID, 0) < 0) {
-			pr_err("%s: timeout waiting for TEGRA_USB_PHY_CLK_VALID = 0\n", __func__);
-			return;
-		}
-		/* (5) set SUSP_CTRL SUSP_CLR = 1 */
-		val = readl(hcd->regs + TEGRA_USB_SUSP_CTRL_OFFSET);
-		writel((val | TEGRA_USB_SUSP_CLR),
-			(hcd->regs + TEGRA_USB_SUSP_CTRL_OFFSET));
-		/* (6) set SUSP_CTRL SUSP_CLR = 0 */
-		val = readl(hcd->regs + TEGRA_USB_SUSP_CTRL_OFFSET);
-		val &= ~(TEGRA_USB_SUSP_CLR);
-		writel(val, (hcd->regs + TEGRA_USB_SUSP_CTRL_OFFSET));
-		/* (7) wait until SUSP_CTRL PHY_VALID = 1 */
-		if (ehci_tegra_wait_register(hcd->regs + TEGRA_USB_SUSP_CTRL_OFFSET,
-				TEGRA_USB_PHY_CLK_VALID, TEGRA_USB_PHY_CLK_VALID) < 0) {
-			pr_err("%s: timeout waiting for TEGRA_USB_PHY_CLK_VALID = 1\n", __func__);
-			return;
-		}
-		/* (8) set PORTSC SRT = 1 */
-		val = ehci_readl(ehci, &ehci->regs->port_status[0]);
-		ehci_writel(ehci, val | TEGRA_USB_SRT, &ehci->regs->port_status[0]);
-		/* (9) set PORTSC FPR = 1 */
-		val = ehci_readl(ehci, &ehci->regs->port_status[0]);
-		ehci_writel(ehci, val | PORT_RESUME, &ehci->regs->port_status[0]);
-		/* (10) wait until PORTSC FPR = 0 */
-		if (handshake(ehci, &ehci->regs->port_status[0], PORT_RESUME,
-								0, 5000)) {
-			pr_err("%s: timeout waiting for PORT_RESUME = 1\n", __func__);
-			return;
-		}
-		/* (11) set PORTSC SRT = 0 */
-		val = ehci_readl(ehci, &ehci->regs->port_status[0]);
-		val &= ~(TEGRA_USB_SRT);
-		ehci_writel(ehci, val, &ehci->regs->port_status[0]);
-		pr_info("} \n");
-	}
-}
-
-EXPORT_SYMBOL(tegra_ehci_recover_rx_error);
-
 #endif
 
 static const struct hc_driver tegra_ehci_hc_driver = {
@@ -1022,10 +934,12 @@ static int tegra_ehci_resume(struct platform_device *pdev)
 {
 	struct tegra_ehci_hcd *tegra = platform_get_drvdata(pdev);
 	struct usb_hcd *hcd = ehci_to_hcd(tegra->ehci);
-
-	if ((tegra->bus_suspended) && (tegra->power_down_on_bus_suspend))
+	printk("tegra_ehci_resume+\n");
+	if ((tegra->bus_suspended) && (tegra->power_down_on_bus_suspend)){
+		printk("tegra_ehci_resume-\n");
 		return 0;
-
+	}
+	printk("tegra_ehci_resume-\n");
 	return tegra_usb_resume(hcd);
 }
 
@@ -1033,13 +947,15 @@ static int tegra_ehci_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	struct tegra_ehci_hcd *tegra = platform_get_drvdata(pdev);
 	struct usb_hcd *hcd = ehci_to_hcd(tegra->ehci);
-
-	if ((tegra->bus_suspended) && (tegra->power_down_on_bus_suspend))
+	printk("tegra_ehci_suspend+\n");
+	if ((tegra->bus_suspended) && (tegra->power_down_on_bus_suspend)){
+		printk("tegra_ehci_suspend-\n");
 		return 0;
-
+	}
 	if (time_before(jiffies, tegra->ehci->next_statechange))
 		msleep(10);
 
+	printk("tegra_ehci_suspend-\n");
 	return tegra_usb_suspend(hcd);
 }
 #endif

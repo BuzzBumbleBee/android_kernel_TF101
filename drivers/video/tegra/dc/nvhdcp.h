@@ -25,5 +25,6 @@ void tegra_nvhdcp_suspend(struct tegra_nvhdcp *nvhdcp);
 struct tegra_nvhdcp *tegra_nvhdcp_create(struct tegra_dc_hdmi_data *hdmi,
 					int id, int bus);
 void tegra_nvhdcp_destroy(struct tegra_nvhdcp *nvhdcp);
-
+/* Fix: Bug#802909 */
+int tegra_nvhdcp_renegotiate(struct tegra_nvhdcp *nvhdcp);
 #endif

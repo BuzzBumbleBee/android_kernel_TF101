@@ -26,7 +26,7 @@
 
 #define MXT_I2C_ADDRESS_EP102                     MXT1386_I2C_ADDR3
 
-#define MXT_BL_ADDRESS                                  0x25
+#define MXT_BL_ADDRESS_EP102                      0x34
 
 #define	MXT224_FAMILYID				        0x80
 #define MXT1386_FAMILYID                                0xA0
@@ -273,7 +273,7 @@ static int mxt_write_block_ep102(struct i2c_client *client, u16 addr, u16 length
 /* Bootloader specific function prototypes. */
 static int mxt_read_byte_bl_ep102(struct i2c_client *client, u8 * value);
 static int mxt_read_block_bl_ep102(struct i2c_client *client, u16 length, u8 * value);
-static int mxt_write_byte_bl_ep102(struct i2c_client *client, u8 value);
+static int mxt_write_byte_bl_ep102(struct i2c_client *client, u16 addr, u16 length, u8 *value);
 static int mxt_write_block_bl_ep102(struct i2c_client *client, u16 length,
 			      u8 *value);
 
@@ -302,10 +302,5 @@ struct mxt_platform_data_ep102 {
 	 u8(*valid_interrupt) (void);
 	 u8(*read_chg) (void);
 };
-
-static u8 mxt_valid_interrupt_dummy_ep102(void)
-{
-	return 1;
-}
 
 void mxt_hw_reset(void);

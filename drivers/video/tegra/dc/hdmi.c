@@ -561,6 +561,10 @@ static void tegra_dc_hdmi_resume(struct tegra_dc *dc)
 	unsigned long flags;
 
 	spin_lock_irqsave(&hdmi->suspend_lock, flags);
+
+	/* Fix: Bug#802909 */
+	tegra_nvhdcp_renegotiate(hdmi->nvhdcp);
+
 	hdmi->suspended = false;
 	if (hdmi->hpd_pending) {
 		if (tegra_dc_hdmi_hpd(dc))

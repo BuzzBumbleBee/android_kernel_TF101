@@ -230,7 +230,7 @@ static int yuv_sensor_power_off(void)
   }
 
   if(reg_p_cam_avdd){
-  	regulator_disable(reg_p_cam_avdd);
+    regulator_disable(reg_p_cam_avdd);
     regulator_put(reg_p_cam_avdd);
     reg_p_cam_avdd = NULL;
   	pr_err("EP101_ov5640_power_off LDO0: p_cam_avdd OK\n");

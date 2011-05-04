@@ -39,10 +39,12 @@
 #include <linux/hwmon-sysfs.h>
 #include <linux/err.h>
 #include <linux/init.h>
+#include <linux/miscdevice.h>
 #include <linux/workqueue.h>
 #include <linux/gpio.h>
 #include <../arch/arm/mach-tegra/gpio-names.h>
-#define suspend_workaround
+#include "atmel_firmware_ep102.h"
+
 /*
  * This is a driver for the Atmel maXTouch Object Protocol
  *
@@ -111,7 +113,38 @@
  *
  */
 
-#define TEGRA_GPIO_PV4		172
+#define WRITE_MEM_OK		0x01
+#define WRITE_MEM_FAILED	0x02
+#define READ_MEM_OK		0x01
+#define READ_MEM_FAILED	0x02
+#define FW_WAITING_BOOTLOAD_COMMAND 0xC0
+#define FW_WAITING_FRAME_DATA       0x80
+#define FW_FRAME_CRC_CHECK          0x02
+#define FW_FRAME_CRC_PASS           0x04
+#define FW_FRAME_CRC_FAIL           0x03
+#define I2C_M_WR 0
+#define I2C_MAX_SEND_LENGTH     600
+#define MXT_IOC_MAGIC 0xF3
+#define MXT_IOC_MAXNR 3
+#define MXT_POLL_DATA _IOR(MXT_IOC_MAGIC,2,int )
+#define MXT_FW_UPDATE _IOR(MXT_IOC_MAGIC,3,int )
+
+
+
+#define MXT_IOCTL_START_HEAVY 2
+#define MXT_IOCTL_START_NORMAL 1
+#define MXT_IOCTL_END 0
+#define START_NORMAL	(HZ/5)
+#define START_HEAVY	(HZ/200)
+
+static int poll_mode_ep102=0;
+struct delayed_work mxt_poll_data_work_ep102;
+static struct workqueue_struct *sensor_work_queue_ep102;
+struct i2c_client *mxt_client_ep102;
+struct mxt_data_ep102*globe_mxt_ep102;
+u32 fw_checksum_ep102;
+u8 ver_major_ep102;
+u8 ver_minor_ep102;
 
 static int debug_ep102 = NO_DEBUG;
 static int comms_ep102;
@@ -165,6 +198,7 @@ struct report_id_map_ep102 {
 struct mxt_data_ep102 {
 	struct i2c_client *client;
 	struct input_dev *input;
+	struct miscdevice  misc_dev;
 	char phys_name[32];
 	int irq;
 
@@ -303,6 +337,17 @@ static int mxt_write_ap_ep102(struct mxt_data_ep102 *mxt, u16 ap);
 static int mxt_read_block_wo_addr_ep102(struct i2c_client *client,
 				  u16 length, u8 *value);
 
+static int mxt_read_block_ep102(struct i2c_client *client, u16 addr, u16 length,
+			  u8 *value);
+static int mxt_write_byte_ep102(struct i2c_client *client, u16 addr, u8 value);
+static int mxt_write_block_ep102(struct i2c_client *client, u16 addr, u16 length,
+			   u8 *value);
+static int mxt_Boot_ep102(struct mxt_data_ep102*mxt);
+static int mxt_init_Boot_ep102(struct mxt_data_ep102*mxt);
+static u8 mxt_valid_interrupt_dummy_ep102(void)
+{
+	return 1;
+}
 static ssize_t store_d_print_ep102(struct device *dev, struct device_attribute *devattr,const char *buf, size_t count)
 {
 	struct i2c_client *client = to_i2c_client(dev);
@@ -321,12 +366,18 @@ static ssize_t show_status_ep102(struct device *dev, struct device_attribute *de
 	return sprintf(buf, "%d\n", data->status);
 }
 
+static ssize_t show_FW_version_ep102(struct device *dev, struct device_attribute *devattr, char *buf)
+{
+	return sprintf(buf, "Touch Firmware Version: %d.%d, checksum is %d\n", ver_major_ep102, ver_minor_ep102, fw_checksum_ep102);
+}
 DEVICE_ATTR(d_print_ep102, S_IRUGO | S_IWUSR, NULL, store_d_print_ep102);
 DEVICE_ATTR(atmel_touchpanel_status_ep102, 0755, show_status_ep102, NULL);
+DEVICE_ATTR(FW_version_ep102, 0755, show_FW_version_ep102, NULL);
 
 static struct attribute *mxt_attr[] = {
 	&dev_attr_d_print_ep102.attr,
 	&dev_attr_atmel_touchpanel_status_ep102.attr,
+	&dev_attr_FW_version_ep102.attr,
 	NULL
 };
 
@@ -858,6 +909,64 @@ static int mxt_write_byte_ep102(struct i2c_client *client, u16 addr, u8 value)
 		return -EIO;
 }
 
+static int mxt_write_byte_bl_ep102(struct i2c_client *client, u16 addr, u16 length, u8 *value)
+{
+	struct i2c_adapter *adapter = client->adapter;
+	struct i2c_msg wmsg;
+	//unsigned char wbuf[3];
+	unsigned char data[I2C_MAX_SEND_LENGTH];
+	int ret,i;
+
+//	printk("Touch: length = %d\n",length);
+	if(length+2 > I2C_MAX_SEND_LENGTH)
+	{
+		printk("[TSP][ERROR] %s() data length error\n", __FUNCTION__);
+		return -ENODEV;
+	}
+
+	wmsg.addr = 0x34;
+	wmsg.flags = I2C_M_WR;
+	wmsg.len = length;
+	wmsg.buf = data;
+
+	for (i = 0; i < length; i++)
+	{
+		data[i] = *(value+i);
+	}
+
+	//	printk("%s, %s\n",__func__,wbuf);
+	ret = i2c_transfer(adapter, &wmsg, 1);
+	return ret;
+
+}
+
+static int mxt_write_mem_bl_ep102(struct i2c_client *client, u16 start, u16 size, u8 *mem)
+{
+	int ret;
+
+	ret = mxt_write_byte_bl_ep102(client, start, size, mem);
+	if(ret < 0){
+		printk("boot write mem fail: %d \n",ret);
+		return(WRITE_MEM_FAILED);
+	}
+	else
+		return(WRITE_MEM_OK);
+}
+
+static int mxt_read_mem_bl_ep102(struct i2c_client *client, u16 start, u16 size, u8 *mem)
+{
+	struct i2c_msg rmsg;
+	int ret;
+
+	rmsg.addr=0x34;
+	rmsg.flags = I2C_M_RD;
+	rmsg.len = size;
+	rmsg.buf = mem;
+	ret = i2c_transfer(client->adapter, &rmsg, 1);
+
+	return ret;
+
+}
 /* Writes a block of bytes (max 256) to given address in mXT chip. */
 static int mxt_write_block_ep102(struct i2c_client *client,
 			   u16 addr, u16 length, u8 *value)
@@ -904,7 +1013,189 @@ int calculate_infoblock_crc_ep102(u32 *crc_result, u8 *data, int crc_area_size)
 	return 0;
 }
 
+static int mxt_boot_unlock_ep102(struct i2c_client *client)
+{
 
+	int ret;
+	unsigned char data[2];
+
+	//   read_buf = (char *)kmalloc(size, GFP_KERNEL | GFP_ATOMIC);
+	data[0] = 0xDC;
+	data[1] = 0xAA;
+
+	ret = mxt_write_byte_bl_ep102(client,0,2,data);
+	if(ret < 0) {
+		printk("%s : i2c write failed\n",__func__);
+		return(WRITE_MEM_FAILED);
+	}
+
+	return(WRITE_MEM_OK);
+
+}
+
+static int mxt_init_Boot_ep102(struct mxt_data_ep102 *mxt)
+{
+	if (fw_checksum_ep102 !=5847330 || ver_minor_ep102 !=1){
+		printk("Touch: start doing FW update\n");
+		mxt_Boot_ep102(mxt);
+		return 0;
+		}
+	else{
+		printk("Touch: FW is the newest\n");
+		return 2;
+		}
+}
+
+static int mxt_Boot_ep102(struct mxt_data_ep102 *mxt)
+{
+	unsigned char boot_status;
+	unsigned char boot_ver;
+	unsigned char retry_cnt;
+	unsigned long int character_position;
+	unsigned int frame_size;
+	unsigned int next_frame;
+	unsigned int crc_error_count;
+	unsigned int size1,size2;
+	unsigned int j,read_status_flag;
+	u8 data = 0xA5;
+
+	u8 reset_result = 0;
+
+	unsigned char  *firmware_data ;
+
+	firmware_data = QT602240_firmware_ep102;
+
+	crc_error_count = 0;
+	character_position = 0;
+	next_frame = 0;
+
+	printk("Touch: start mxt_Boot\n");
+	mxt_write_byte_ep102(mxt->client, MXT_BASE_ADDR(MXT_GEN_COMMANDPROCESSOR_T6, mxt) + MXT_ADR_T6_RESET, 1);
+
+	if(reset_result != WRITE_MEM_OK){
+		for(retry_cnt =0; retry_cnt < 3; retry_cnt++){
+			mdelay(100);
+			printk("Touch: Enter Bootloader mode\n");
+			reset_result = mxt_write_byte_ep102(mxt->client, MXT_BASE_ADDR(MXT_GEN_COMMANDPROCESSOR_T6, mxt) + MXT_ADR_T6_RESET, data);
+			if(reset_result == WRITE_MEM_OK){
+				break;
+			}
+		}
+
+	}
+
+	if (reset_result == WRITE_MEM_OK)
+		printk("Boot reset OK\r\n");
+
+		mdelay(100);
+
+		for(retry_cnt = 0; retry_cnt < 30; retry_cnt++){
+			if( (mxt_read_mem_bl_ep102(mxt->client,0,1,&boot_status) == READ_MEM_OK) && (boot_status & 0xC0) == 0xC0){
+				boot_ver = boot_status & 0x3F;
+				crc_error_count = 0;
+				character_position = 0;
+				next_frame = 0;
+
+				while(1){
+					for(j = 0; j<5; j++){
+						mdelay(60);
+						if(mxt_read_mem_bl_ep102(mxt->client,0,1,&boot_status) == READ_MEM_OK){
+							read_status_flag = 1;
+							break;
+						}
+						else
+							read_status_flag = 0;
+					}
+
+					if(read_status_flag==1)
+		//			if(boot_read_mem(0,1,&boot_status) == READ_MEM_OK)
+					{
+						retry_cnt  = 0;
+						//printk("TSP boot status is %x stage 2 \n", boot_status);
+						if((boot_status & FW_WAITING_BOOTLOAD_COMMAND) == FW_WAITING_BOOTLOAD_COMMAND){
+							if(mxt_boot_unlock_ep102(mxt->client) == WRITE_MEM_OK){
+								mdelay(10);
+
+								printk("Unlock OK\n");
+
+							}
+							else{
+								printk("Unlock fail\n");
+							}
+						}
+						else if((boot_status & 0xC0) == FW_WAITING_FRAME_DATA){
+							 /* Add 2 to frame size, as the CRC bytes are not included */
+							size1 =  *(firmware_data+character_position);
+							size2 =  *(firmware_data+character_position+1)+2;
+							frame_size = (size1<<8) + size2;
+
+							//printk("Frame size:%d\n", frame_size);
+							//printk("Firmware pos:%d\n", character_position);
+							/* Exit if frame data size is zero */
+							if( 0 == frame_size ){
+								if(mxt->client->addr== MXT_BL_ADDRESS_EP102){
+									mxt->client->addr = MXT_I2C_ADDRESS_EP102;
+								}
+								printk("0 == frame_size\n");
+								return 1;
+							}
+							next_frame = 1;
+							//printk("Touch: write mem after next_frame=1 \n");
+							mxt_write_mem_bl_ep102(mxt->client,0,frame_size, (firmware_data +character_position));
+							mdelay(10);
+							//printk(".");
+
+						}
+						else if(boot_status == FW_FRAME_CRC_CHECK)
+						{
+							//printk("CRC Check\n");
+						}
+						else if(boot_status == FW_FRAME_CRC_PASS)
+						{
+							if( next_frame == 1)
+							{
+								//printk("CRC Ok\n");
+								character_position += frame_size;
+								next_frame = 0;
+							}
+							else {
+								printk("next_frame != 1\n");
+							}
+						}
+						else if(boot_status  == FW_FRAME_CRC_FAIL)
+						{
+							printk("CRC Fail\n");
+							crc_error_count++;
+						}
+						if(crc_error_count > 10)
+						{
+							return FW_FRAME_CRC_FAIL;
+						}
+
+					}
+					else
+					{
+						printk("Touch: read_status_flag !=1, doing reset and exit\n");
+						return (0);
+					}
+				}
+			}
+			else
+			{
+				printk("[TSP] read_boot_state() or (boot_status & 0xC0) == 0xC0) is fail!!!\n");
+				printk("Touch: mxt_read_mem_bl(mxt->client,0,1,&boot_status)=%d, boot_status=%d\n",mxt_read_mem_bl_ep102(mxt->client,0,1,&boot_status),boot_status);
+			}
+		}
+
+		printk("QT_Boot end \n");
+		gpio_set_value(TEGRA_GPIO_PQ7, 0);
+		msleep(1);
+		gpio_set_value(TEGRA_GPIO_PQ7, 1);
+		msleep(100);
+
+		return (0);
+
+}
 static int init_key_array(struct mxt_data_ep102 *mxt)
 {
 
@@ -1687,6 +1978,8 @@ static int __devinit mxt_identify_ep102(struct i2c_client *client,
 		 "Atmel maXTouch Configuration "
 		 "[X: %d] x [Y: %d]\n",
 		 mxt->device_info.x_size, mxt->device_info.y_size);
+	ver_major_ep102=mxt->device_info.major;
+	ver_minor_ep102=mxt->device_info.minor;
 	return identified;
 }
 
@@ -1879,6 +2172,7 @@ static int __devinit mxt_read_object_table_ep102(struct i2c_client *client,
 
 	if (crc == calculated_crc) {
 		mxt->info_block_crc = crc;
+		fw_checksum_ep102=mxt->info_block_crc;
 	} else {
 		mxt->info_block_crc = 0;
 		printk(KERN_ALERT "maXTouch: Info block CRC invalid!\n");
@@ -1919,6 +2213,85 @@ static int __devinit mxt_read_object_table_ep102(struct i2c_client *client,
 	return error;
 }
 
+static void  mxt_poll_data_ep102(struct work_struct * work)
+{
+	bool status;
+	u8 count[7];
+	status = mxt_read_block_ep102(mxt_client_ep102, 0, 7, (u8 *)count);
+	if(status < 0)
+		printk("Read touch sensor data fail\n");
+
+	if(poll_mode_ep102==0)
+		msleep(5);
+
+	queue_delayed_work(sensor_work_queue_ep102, &mxt_poll_data_work_ep102, poll_mode_ep102);
+}
+
+int mxt_stress_open_ep102(struct inode *inode, struct file *filp)
+{
+	printk("%s\n", __func__);
+	return 0;          /* success */
+}
+
+
+int mxt_stress_release_ep102(struct inode *inode, struct file *filp)
+{
+	printk("%s\n", __func__);
+	return 0;          /* success */
+}
+
+int mxt_stress_ioctl_ep102(struct file *filp, unsigned int cmd, unsigned long arg)
+{
+	struct mxt_data_ep102 *mxt;
+	int err = 1;
+	mxt = globe_mxt_ep102;
+
+	if (_IOC_TYPE(cmd) != MXT_IOC_MAGIC)
+	return -ENOTTY;
+	if (_IOC_NR(cmd) > MXT_IOC_MAXNR)
+	return -ENOTTY;
+
+	if (_IOC_DIR(cmd) & _IOC_READ)
+	err = !access_ok(VERIFY_WRITE, (void __user *)arg, _IOC_SIZE(cmd));
+	else if (_IOC_DIR(cmd) & _IOC_WRITE)
+	err =  !access_ok(VERIFY_READ, (void __user *)arg, _IOC_SIZE(cmd));
+	if (err) return -EFAULT;
+
+	switch (cmd) {
+		case MXT_POLL_DATA:
+			if (arg == MXT_IOCTL_START_HEAVY){
+				printk("touch sensor heavey\n");
+			poll_mode_ep102= START_HEAVY;
+			queue_delayed_work(sensor_work_queue_ep102, &mxt_poll_data_work_ep102, poll_mode_ep102);
+			}
+			else if (arg == MXT_IOCTL_START_NORMAL){
+				printk("touch sensor normal\n");
+				poll_mode_ep102= START_NORMAL;
+				queue_delayed_work(sensor_work_queue_ep102, &mxt_poll_data_work_ep102, poll_mode_ep102);
+			}
+			else if  (arg == MXT_IOCTL_END){
+			printk("touch sensor end\n");
+			cancel_delayed_work_sync(&mxt_poll_data_work_ep102);
+			}
+			else
+	return -ENOTTY;
+	break;
+		case MXT_FW_UPDATE:
+			printk("+MXT_FW_UPDATE\n");
+			return mxt_init_Boot_ep102(mxt);
+		break;
+	default: /* redundant, as cmd was checked against MAXNR */
+	return -ENOTTY;
+		}
+	return 0;
+}
+
+	struct file_operations mxt_fops_ep102 = {
+		.owner =    THIS_MODULE,
+		.unlocked_ioctl =		mxt_stress_ioctl_ep102,
+		.open =		mxt_stress_open_ep102,
+		.release =	mxt_stress_release_ep102,
+		};
 static int __devinit mxt_probe_ep102(struct i2c_client *client,
 			       const struct i2c_device_id *id)
 {
@@ -1928,6 +2301,7 @@ static int __devinit mxt_probe_ep102(struct i2c_client *client,
 	struct input_dev *input;
 	u8 *id_data;
 	int error;
+	int err;
 
 	mxt_debug_ep102(DEBUG_INFO, "mXT224: mxt_probe\n");
 
@@ -1992,6 +2366,7 @@ static int __devinit mxt_probe_ep102(struct i2c_client *client,
 		error = -ENOMEM;
 		goto err_mxt_alloc;
 	}
+	globe_mxt_ep102=mxt;
 	id_data = kmalloc(MXT_ID_BLOCK_SIZE, GFP_KERNEL);
 	if (id_data == NULL) {
 		dev_err(&client->dev, "insufficient memory\n");
@@ -2190,6 +2565,21 @@ init_key_array (mxt);
 		}
 	}
 
+	sensor_work_queue_ep102= create_singlethread_workqueue("i2c_touchsensor_wq");
+	if(!sensor_work_queue_ep102){
+		pr_err("touch_probe: Unable to create workqueue");
+		goto err_irq;
+		}
+
+	INIT_DELAYED_WORK(&mxt_poll_data_work_ep102, mxt_poll_data_ep102);
+	mxt->misc_dev.minor  = MISC_DYNAMIC_MINOR;
+	mxt->misc_dev.name = "touchpanel";
+	mxt->misc_dev.fops = &mxt_fops_ep102;
+	err = misc_register(&mxt->misc_dev);
+		if (err) {
+			pr_err("tegra_acc_probe: Unable to register %s \\misc device\n", mxt->misc_dev.name);
+		goto misc_register_device_failed;
+			}
 	if (debug_ep102 > DEBUG_INFO)
 		dev_info(&client->dev, "touchscreen, irq %d\n", mxt->irq);
 
@@ -2214,6 +2604,8 @@ mxt->attrs.attrs = mxt_attr;
 	kfree(mxt->rid_map);
 	kfree(mxt->object_table);
 	kfree(mxt->last_message);
+misc_register_device_failed:
+	misc_deregister(&mxt->misc_dev);
  err_read_ot:
  err_register_device:
  err_identify:

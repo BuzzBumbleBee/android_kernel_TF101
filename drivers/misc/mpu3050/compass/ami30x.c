@@ -64,6 +64,7 @@
 #define AMI30X_CALIBRATION_PATH "/data/sensors/AMI304_Config.ini"
 
 static int gain_x = 100, gain_y = 100, gain_z = 100;
+static int offset_x = 0, offset_y = 0, offset_z = 0;
 static bool flagLoadConfig = false;
 
 static int access_calibration_file(void)
@@ -126,6 +127,7 @@ int ami30x_suspend(void *mlsl_handle,
 {
 	int result;
 	unsigned char reg;
+	printk("%s+\n", __func__);
 	result =
 	    MLSLSerialRead(mlsl_handle, pdata->address, AMI30X_REG_CNTL1,
 			   1, &reg);
@@ -136,7 +138,7 @@ int ami30x_suspend(void *mlsl_handle,
 	    MLSLSerialWriteSingle(mlsl_handle, pdata->address,
 				  AMI30X_REG_CNTL1, reg);
 	ERROR_CHECK(result);
-
+	printk("%s-\n", __func__);
 	return result;
 }
 
@@ -145,7 +147,7 @@ int ami30x_resume(void *mlsl_handle,
 		  struct ext_slave_platform_data *pdata)
 {
 	int result = ML_SUCCESS;
-
+	printk("%s+\n", __func__);
 	/* Set CNTL1 reg to power model active */
 	result =
 	    MLSLSerialWriteSingle(mlsl_handle, pdata->address,
@@ -163,7 +165,7 @@ int ami30x_resume(void *mlsl_handle,
 	result =
 		MLSLSerialWriteSingle(mlsl_handle, pdata->address,
 				  AMI30X_REG_CNTL3, AMI30X_BIT_CNTL3_F0RCE);
-
+	printk("%s-\n", __func__);
 	return result;
 }
 
@@ -174,7 +176,6 @@ int ami30x_read(void *mlsl_handle,
 	unsigned char stat;
 	int result = ML_SUCCESS;
 	int x = 0, y = 0, z = 0;
-
 	/* Read status reg and check if data ready (DRDY) */
 	result =
 	    MLSLSerialRead(mlsl_handle, pdata->address, AMI30X_REG_STAT1,
@@ -197,18 +198,31 @@ int ami30x_read(void *mlsl_handle,
 					      AMI30X_REG_CNTL3,
 					      AMI30X_BIT_CNTL3_F0RCE);
 		ERROR_CHECK(result);
-//		printk("%02x%02x %02x%02x %02x%02x\n", data[1], data[0], data[3], data[2], data[5], data[4]);
-		x = ((data[1] << 8 | data[0]) )*gain_x/100;
-		y = ((data[3] << 8 | data[2]) )*gain_y/100;
-		z = ((data[5] << 8 | data[4]) )*gain_z/100;
-//		printk("x: %d y: %d z: %d\n", x, y, z);
+		//printk("%02x%02x %02x%02x %02x%02x\n", data[1], data[0], data[3], data[2], data[5], data[4]);
+		x =  ((short)(data[1] << 8 | data[0]))*gain_x/100;
+		y =  ((short)(data[3] << 8 | data[2]))*gain_y/100;
+		z =  ((short)(data[5] << 8 | data[4]))*gain_z/100;
+		if ( x >= 2047)
+			x = 2047;
+		if ( x < -2048)
+			x = -2048;
+	        if ( y >= 2047)
+                        y = 2047;
+                if ( y < -2048)
+                        y = -2048;
+	        if ( z >= 2047)
+                        z = 2047;
+                if ( z < -2048)
+                        z = -2048;
+
+		//printk("x : %d y : %d z : %d\n", x, y, z);
 		data[0] = x & 0x000000FF;
 		data[1] = ( x & 0x0000FF00) >> 8;
                 data[2] = y & 0x000000FF;
                 data[3] = ( y & 0x0000FF00) >> 8;
                 data[4] = z & 0x000000FF;
                 data[5] = ( z & 0x0000FF00) >> 8;
-//		printk("%02x%02x %02x%02x %02x%02x\n", data[1], data[0], data[3], data[2], data[5], data[4]);
+		//printk("%02x%02x %02x%02x %02x%02x\n", data[1], data[0], data[3], data[2], data[5], data[4]);
 
 		return ML_SUCCESS;
 	}

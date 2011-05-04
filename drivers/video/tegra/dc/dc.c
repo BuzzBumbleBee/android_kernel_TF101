@@ -37,6 +37,7 @@
 #include <mach/fb.h>
 #include <mach/mc.h>
 #include <mach/nvhost.h>
+#include <mach/board-ventana-misc.h>
 
 #include "dc_reg.h"
 #include "dc_priv.h"
@@ -57,6 +58,7 @@ bool b_dc0_enabled;
 extern int battery_charger_callback(unsigned int enable);
 extern  int mxt_enable(void);
 extern  int mxt_disable(void);
+
 module_param_named(no_vsync, no_vsync, int, S_IRUGO | S_IWUSR);
 
 struct tegra_dc *tegra_dcs[TEGRA_MAX_DC];
@@ -1168,19 +1170,19 @@ static void tegra_dc_init(struct tegra_dc *dc)
 
 static bool _tegra_dc_enable(struct tegra_dc *dc)
 {
-	printk("Disp: _tegra_dc_enable(id= %d) in\n", dc->ndev->id);
+	printk("Disp: _tegra_dc_enable(id= %d) in+\n", dc->ndev->id);
 
 	if (dc->ndev->id == 0) {
 		struct timeval t_resume;
 		int diff_msec = 0;
 
 		if (dc->mode.pclk == 0) {
-			printk("Disp: _tegra_dc_enable(id= %d) false out\n", dc->ndev->id);
+			printk("Disp: _tegra_dc_enable(id= %d) false out-\n", dc->ndev->id);
 			return false;
 		}
 
 		if (!dc->out) {
-			printk("Disp: _tegra_dc_enable(id= %d) false out2\n", dc->ndev->id);
+			printk("Disp: _tegra_dc_enable(id= %d) false out2-\n", dc->ndev->id);
 			return false;
 		}
 		battery_charger_callback(false);
@@ -1229,16 +1231,16 @@ static bool _tegra_dc_enable(struct tegra_dc *dc)
 		msleep(210);
 		b_dc0_enabled = true;
 
-		printk("Disp: _tegra_dc_enable(id= %d) out\n", dc->ndev->id);
+		printk("Disp: _tegra_dc_enable(id= %d) out-\n", dc->ndev->id);
 		return true;
 	} else {
 		if (dc->mode.pclk == 0) {
-			printk("Disp: _tegra_dc_enable(id= %d) false out\n", dc->ndev->id);
+			printk("Disp: _tegra_dc_enable(id= %d) false out-\n", dc->ndev->id);
 			return false;
 		}
 
 		if (!dc->out) {
-			printk("Disp: _tegra_dc_enable(id= %d) false out2\n", dc->ndev->id);
+			printk("Disp: _tegra_dc_enable(id= %d) false out2-\n", dc->ndev->id);
 			return false;
 		}
 
@@ -1268,7 +1270,7 @@ static bool _tegra_dc_enable(struct tegra_dc *dc)
 		/* force a full blending update */
 		dc->blend.z[0] = -1;
 
-		printk("Disp: _tegra_dc_enable(id= %d) out\n", dc->ndev->id);
+		printk("Disp: _tegra_dc_enable(id= %d) out-\n", dc->ndev->id);
 		return true;
 	}
 }
@@ -1285,7 +1287,7 @@ void tegra_dc_enable(struct tegra_dc *dc)
 
 static void _tegra_dc_disable(struct tegra_dc *dc)
 {
-	printk("Disp: _tegra_dc_disable(id= %d) in\n", dc->ndev->id);
+	printk("Disp: _tegra_dc_disable(id= %d) in+\n", dc->ndev->id);
 
 	if (dc->ndev->id == 0) {
 		b_dc0_enabled = false;
@@ -1317,8 +1319,10 @@ static void _tegra_dc_disable(struct tegra_dc *dc)
 		}
 
 		tegra_dc_io_end(dc);
+
 		if (mxt_disable() ==0)
 			battery_charger_callback(true);
+
 	} else {
 		disable_irq(dc->irq);
 
@@ -1341,7 +1345,7 @@ static void _tegra_dc_disable(struct tegra_dc *dc)
 		tegra_dc_io_end(dc);
 	}
 
-	printk("Disp: _tegra_dc_disable(id= %d) out\n", dc->ndev->id);
+	printk("Disp: _tegra_dc_disable(id= %d) out-\n", dc->ndev->id);
 }
 
 
@@ -1513,8 +1517,20 @@ static int tegra_dc_probe(struct nvhost_device *ndev)
 	dc->modeset_switch.print_state = switch_modeset_print_mode;
 	switch_dev_register(&dc->modeset_switch);
 
-	if (dc->pdata->default_out)
+	if (dc->pdata->default_out) {
+		if(dc->ndev->id == 0) {
+			if (ASUS3GAvailable())
+				dc->pdata->default_out->modes[0].pclk = 83900000;
+			else {
+				/* There might be a proper pclk for wifi sku in the future.
+				 * Another 3G/Wifi sku check is in tegra2_clocks.c.
+				 */
+				dc->pdata->default_out->modes[0].pclk = 83900000;
+			}
+			printk("DC: Set LCD pclk as %d Hz\n", dc->pdata->default_out->modes[0].pclk);
+		}
 		tegra_dc_set_out(dc, dc->pdata->default_out);
+	}
 	else
 		dev_err(&ndev->dev, "No default output specified.  Leaving output disabled.\n");
 

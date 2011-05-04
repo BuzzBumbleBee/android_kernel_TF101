@@ -28,25 +28,25 @@
 //                  |PRJ[1:0]|SKU[1:0]|
 //                  +-----------------+
 //    PRJ[1:0]           SKU[1:0]
-//    00b -> TF101       00b -> W/O 3G
-//    00b -> TF101       01b -> 3G
-//    00b -> TF101       10b -> TBD
-//    00b -> TF101       11b -> TBD
+//    00b -> TF101       00b -> W/O 3G, Murata BT/WLAN
+//    00b -> TF101       01b -> 3G, Murata BT/WLAN
+//    00b -> TF101       10b -> W/O 3G, AZW BT/WLAN
+//    00b -> TF101       11b -> 3G, AZW BT/WLAN
 //
 //    01b -> TBD         00b -> TBD
 //    01b -> TBD         01b -> TBD
 //    01b -> TBD         10b -> TBD
 //    01b -> TBD         11b -> TBD
 //
-//    10b -> SL101       00b -> TBD
-//    10b -> SL101       01b -> TBD
-//    10b -> SL101       10b -> TBD
-//    10b -> SL101       11b -> TBD
+//    10b -> SL101       00b -> W/O 3G, Murata BT/WLAN
+//    10b -> SL101       01b -> 3G, Murata BT/WLAN
+//    10b -> SL101       10b -> W/O 3G, AZW BT/WLAN
+//    10b -> SL101       11b -> 3G, AZW BT/WLAN
 //
-//    11b -> JN101       00b -> TBD
-//    11b -> JN101       01b -> TBD
-//    11b -> JN101       10b -> TBD
-//    11b -> JN101       11b -> TBD
+//    11b -> JN101       00b -> W/O 3G, Murata BT/WLAN
+//    11b -> JN101       01b -> 3G, Murata BT/WLAN
+//    11b -> JN101       10b -> W/O 3G, AZW BT/WLAN
+//    11b -> JN101       11b -> 3G, AZW BT/WLAN
 //
 #ifndef ASUS_TEGRA_DEVKIT_MISC_HW_H
 #define ASUS_TEGRA_DEVKIT_MISC_HW_H
@@ -101,11 +101,14 @@ extern "C"
 #define TEGRA_DEVKIT_MISC_HW_0_MMCTYPE_3     	0x3UL //HYN 64G
 
 //SKU Identification
-#define TEGRA_DEVKIT_MISC_HW_0_SKU_RANGE        5:4
-#define TEGRA_DEVKIT_MISC_HW_0_SKU_DEFAULT      0x0UL //TF101: w/o 3G
-#define TEGRA_DEVKIT_MISC_HW_0_SKU_1            0x1UL //TF101: 3G
-#define TEGRA_DEVKIT_MISC_HW_0_SKU_2            0x2UL //TBD
-#define TEGRA_DEVKIT_MISC_HW_0_SKU_3            0x3UL //TBD
+#define TEGRA_DEVKIT_MISC_HW_0_SKU_RANGE        4:4
+#define TEGRA_DEVKIT_MISC_HW_0_SKU_DEFAULT      0x0UL //W/O 3G
+#define TEGRA_DEVKIT_MISC_HW_0_SKU_1            0x1UL //3G
+
+//BT/WLAN Module Vendor
+#define TEGRA_DEVKIT_MISC_HW_0_VENDOR_RANGE     5:5
+#define TEGRA_DEVKIT_MISC_HW_0_VENDOR_DEFAULT   0x0UL //Murata BT/WLAN
+#define TEGRA_DEVKIT_MISC_HW_0_VENDOR_1         0x1UL //AZW BT/WLAN
 
 
 //Project Identification
@@ -146,7 +149,20 @@ unsigned int ASUSGetProjectID(void);
  *   @ret unsigned int
  *      If 3G is equipped, 1 will be returned; Otherwise, 0 will be instead.
  */
-unsigned int ASUS3GAvaiable(void);
+unsigned int ASUS3GAvailable(void);
+
+
+#define BT_WLAN_VENDOR_AZW          TEGRA_DEVKIT_MISC_HW_0_VENDOR_DEFAULT
+#define BT_WLAN_VENDOR_MURATA       TEGRA_DEVKIT_MISC_HW_0_VENDOR_1
+
+/* Check if BT/WLAN module vendor is equipped
+ *   @param v module name
+ *   @ret unsigned int
+ *      If specified wireless module is equipped, 1 will be returned;
+ *      Otherwise, 0 will be instead.
+ */
+unsigned int ASUSCheckWLANVendor(unsigned int vendor);
+
 #if defined(__cplusplus)
 }
 #endif

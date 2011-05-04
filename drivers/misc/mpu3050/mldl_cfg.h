@@ -161,6 +161,15 @@ int mpu3050_suspend(struct mldl_cfg *mldl_cfg,
 		    bool suspend_accel,
 		    bool suspend_compass,
 		    bool suspend_pressure);
+int mpu3050_shutdown(struct mldl_cfg *mldl_cfg,
+		    void *gyro_handle,
+		    void *accel_handle,
+		    void *compass_handle,
+		    void *pressure_handle,
+		    bool suspend_gyro,
+		    bool suspend_accel,
+		    bool suspend_compass,
+		    bool suspend_pressure);
 int mpu3050_read_accel(struct mldl_cfg *mldl_cfg,
 		       void *accel_handle,
 		       unsigned char *data);

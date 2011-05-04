@@ -1458,8 +1458,8 @@ receive_chars(struct uart_8250_port *up, unsigned int *status)
 			else if (lsr & UART_LSR_FE)
 				flag = TTY_FRAME;
 		}
-		if (uart_handle_sysrq_char(&up->port, ch))
-			goto ignore_char;
+		//if (uart_handle_sysrq_char(&up->port, ch))
+		//	goto ignore_char;
 
 		uart_insert_char(&up->port, lsr, UART_LSR_OE, ch, flag);
 

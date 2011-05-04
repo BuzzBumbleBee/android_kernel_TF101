@@ -71,7 +71,6 @@
 #include "fuse.h"
 #include "wakeups-t2.h"
 
-extern unsigned int ASUS3GAvaiable();
 
 static struct usb_mass_storage_platform_data tegra_usb_fsg_platform = {
 //	.vendor = "NVIDIA",
@@ -390,7 +389,7 @@ static const struct tegra_pingroup_config i2c2_gen2 = {
 static struct tegra_i2c_platform_data ventana_i2c2_platform_data = {
 	.adapter_nr	= 1,
 	.bus_count	= 2,
-	.bus_clk_rate	= {400000, 10000 },
+	.bus_clk_rate	= {400000, 100000 },
 	.bus_mux	= { &i2c2_ddc, &i2c2_gen2 },
 	.bus_mux_len	= { 1, 1 },
 };
@@ -596,7 +595,6 @@ static struct platform_device tegra_camera = {
 static struct platform_device *ventana_devices[] __initdata = {
 	&tegra_usb_fsg_device,
 	&androidusb_device,
-	&debug_uart,
 	&tegra_uartb_device,
 	&tegra_uartc_device,
 	&pmu_device,
@@ -924,6 +922,7 @@ static struct tegra_otg_platform_data tegra_otg_pdata = {
 	.host_unregister = &tegra_usb_otg_host_unregister,
 };
 
+extern int console_none_on_cmdline;
 static int __init ventana_gps_init(void)
 {
 	struct clk *clk32 = clk_get_sys(NULL, "blink");
@@ -1003,13 +1002,25 @@ static void __init tegra_ventana_init(void)
 	tegra_i2s_device2.dev.platform_data = &tegra_audio_pdata[1];
 	tegra_spdif_device.dev.platform_data = &tegra_spdif_pdata;
 	tegra_das_device.dev.platform_data = &tegra_das_pdata;
+
 	//disable for wifi sku
-       if(ASUS3GAvaiable() != 0){
+	if (ASUS3GAvailable()) {
                tegra_ehci2_device.dev.platform_data
                        = &ventana_ehci2_ulpi_platform_data;
-       }
+	}
 
 	platform_add_devices(ventana_devices, ARRAY_SIZE(ventana_devices));
+
+	if ((ASUSGetProjectID() != 103) && (!console_none_on_cmdline)) {
+		//register debug uart resource only if
+		//"console=ttyXX" is specified and running target platform
+		//is not JN101(EP103)
+		platform_device_register(&debug_uart);
+		tegra_gpio_enable(TEGRA_GPIO_PB0);
+		gpio_request(TEGRA_GPIO_PB0, "UART4_RXD");
+		//limit RXD of UART debug console.
+		gpio_direction_output(TEGRA_GPIO_PB0, 1);
+	}
 
 	ventana_sdhci_init();
 	//ventana_charge_init();

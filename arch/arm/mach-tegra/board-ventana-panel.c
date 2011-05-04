@@ -190,6 +190,8 @@ static struct resource ventana_disp2_resources[] = {
 
 static struct tegra_dc_mode ventana_panel_modes[] = {
 	{
+		/* Warning.
+		 * The real LCD pclk will be replaced in tegra_dc_probe(). */
 		.pclk = 83800000,
 		.h_ref_to_sync = 11,
 		.v_ref_to_sync = 1,
@@ -208,14 +210,14 @@ static struct tegra_fb_data ventana_fb_data = {
 	.win		= 0,
 	.xres		= 1280,
 	.yres		= 800,
-	.bits_per_pixel	= 16,
+	.bits_per_pixel	= 32,
 };
 
 static struct tegra_fb_data ventana_hdmi_fb_data = {
 	.win		= 0,
 	.xres		= 1280,
 	.yres		= 800,
-	.bits_per_pixel	= 16,
+	.bits_per_pixel	= 32,
 };
 
 static struct tegra_dc_out ventana_disp1_out = {
@@ -327,14 +329,22 @@ struct early_suspend ventana_panel_early_suspender;
 
 static void ventana_panel_early_suspend(struct early_suspend *h)
 {
+	printk("ventana_panel_early_suspend() in+\n");
+
 	if (num_registered_fb > 0)
 		fb_blank(registered_fb[0], FB_BLANK_POWERDOWN);
+
+	printk("ventana_panel_early_suspend() out-\n");
 }
 
 static void ventana_panel_late_resume(struct early_suspend *h)
 {
+	printk("ventana_panel_late_resume() in+\n");
+
 	if (num_registered_fb > 0)
 		fb_blank(registered_fb[0], FB_BLANK_UNBLANK);
+
+	printk("ventana_panel_late_resume() out-\n");
 }
 #endif
 

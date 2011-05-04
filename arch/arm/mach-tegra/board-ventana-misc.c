@@ -77,19 +77,44 @@ unsigned int ASUSGetProjectID()
 
 EXPORT_SYMBOL(ASUSGetProjectID);
 
-unsigned int ASUS3GAvaiable()
+unsigned int ASUS3GAvailable()
 {
 	unsigned int ret = 0;
 
-	if (!HW_DRF_VAL(TEGRA_DEVKIT, MISC_HW, PROJECT, ventana_hw)) {
-		//So far, only TF101(EP101) has 3G SKU definition
+	if (HW_DRF_VAL(TEGRA_DEVKIT, MISC_HW, PROJECT, ventana_hw) != 1) {
+		//All valid projects (TF101/SL101/JN101) have 3G SKU definition
 		return HW_DRF_VAL(TEGRA_DEVKIT, MISC_HW, SKU, ventana_hw);
 	}
 
 	return ret;
 }
 
-EXPORT_SYMBOL(ASUS3GAvaiable);
+EXPORT_SYMBOL(ASUS3GAvailable);
+
+unsigned int ASUSCheckWLANVendor(unsigned int vendor)
+{
+	unsigned int ret = 0;
+
+	if (HW_DRF_VAL(TEGRA_DEVKIT, MISC_HW, PROJECT, ventana_hw) != 1) {
+		//All valid projects (TF101/SL101/JN101) have BT/WLAN module
+		//definition
+		switch (vendor) {
+		case BT_WLAN_VENDOR_MURATA:
+			ret = HW_DRF_VAL(TEGRA_DEVKIT, MISC_HW, VENDOR,
+				ventana_hw) ? 0 : 1;
+			break;
+		case BT_WLAN_VENDOR_AZW:
+			ret = HW_DRF_VAL(TEGRA_DEVKIT, MISC_HW, VENDOR,
+				ventana_hw) ? 1 : 0;
+			break;
+		default:
+			pr_err("[MISC]: Check WLAN with undefined vendor.\n");
+		}
+        }
+
+	return ret;
+}
+EXPORT_SYMBOL(ASUSCheckWLANVendor);
 
 static ssize_t ventana_hw_show(struct kobject *kobj,
 	struct kobj_attribute *attr, char *buf)

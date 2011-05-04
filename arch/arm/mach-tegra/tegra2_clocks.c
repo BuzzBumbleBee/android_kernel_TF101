@@ -30,6 +30,7 @@
 
 #include <mach/iomap.h>
 #include <mach/suspend.h>
+#include <mach/board-ventana-misc.h>
 
 #include "clock.h"
 #include "fuse.h"
@@ -166,6 +167,7 @@ static int tegra_periph_clk_enable_refcount[3 * 32];
 	__raw_writel(value, (u32)reg_pmc_base + (reg))
 #define pmc_readl(reg) \
 	__raw_readl((u32)reg_pmc_base + (reg))
+
 
 unsigned long clk_measure_input_freq(void)
 {
@@ -600,7 +602,16 @@ static void tegra2_pll_clk_init(struct clk *c)
 
 	/* TODO: The following is only for HSD. */
 	if(!strcmp(c->name, "pll_c")) {
-		u32 pll_c_mul = 587;
+		u32 pll_c_mul;
+		if (ASUS3GAvailable())
+			pll_c_mul = 587;
+		else {
+			/* There might be a proper pclk for wifi sku in the future.
+			 * Another 3G/Wifi sku check is in dc.c.
+			 */
+			pll_c_mul = 587;
+		}
+
 		printk("LCD: Set mul of pll_c as \"%d\" for disp1\n", pll_c_mul);
 		val &= ~PLL_BASE_DIVN_MASK;
 		val = val | (pll_c_mul << PLL_BASE_DIVN_SHIFT);

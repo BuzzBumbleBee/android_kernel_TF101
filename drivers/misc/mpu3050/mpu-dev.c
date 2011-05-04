@@ -742,6 +742,7 @@ static long mpu_ioctl(struct file *file,
 	{
 		unsigned long sensors;
 		sensors = ~(mldl_cfg->requested_sensors);
+		printk("MPU_SUSPEND IOCTL+\n");
 		retval = mpu3050_suspend(mldl_cfg,
 					client->adapter,
 					accel_adapter,
@@ -755,12 +756,14 @@ static long mpu_ioctl(struct file *file,
 						== ML_THREE_AXIS_COMPASS),
 					((sensors & ML_THREE_AXIS_PRESSURE)
 						== ML_THREE_AXIS_PRESSURE));
+		printk("MPU_SUSPEND IOCTL-\n");
 	}
 	break;
 	case MPU_RESUME:
 	{
 		unsigned long sensors;
 		sensors = mldl_cfg->requested_sensors;
+		printk("MPU_RESUME IOCTL+\n");
 		retval = mpu3050_resume(mldl_cfg,
 					client->adapter,
 					accel_adapter,
@@ -770,6 +773,7 @@ static long mpu_ioctl(struct file *file,
 					sensors & ML_THREE_AXIS_ACCEL,
 					sensors & ML_THREE_AXIS_COMPASS,
 					sensors & ML_THREE_AXIS_PRESSURE);
+		printk("MPU_RESUME IOCTL-\n");
 	}
 	break;
 	case MPU_READ_ACCEL:
@@ -895,17 +899,18 @@ void mpu_shutdown(struct i2c_client *client)
 	struct i2c_adapter *accel_adapter;
 	struct i2c_adapter *compass_adapter;
 	struct i2c_adapter *pressure_adapter;
-
+	printk("%s+\n", __func__);
 	accel_adapter = i2c_get_adapter(mldl_cfg->pdata->accel.adapt_num);
 	compass_adapter =
 	    i2c_get_adapter(mldl_cfg->pdata->compass.adapt_num);
 	pressure_adapter =
 	    i2c_get_adapter(mldl_cfg->pdata->pressure.adapt_num);
 
-	(void) mpu3050_suspend(mldl_cfg, this_client->adapter,
+	(void) mpu3050_shutdown(mldl_cfg, this_client->adapter,
 			       accel_adapter, compass_adapter, pressure_adapter,
 			       TRUE, TRUE, TRUE, TRUE);
 	dev_dbg(&this_client->adapter->dev, "%s\n", __func__);
+	printk("%s-\n", __func__);
 }
 
 int mpu_suspend(struct i2c_client *client, pm_message_t mesg)
@@ -916,7 +921,7 @@ int mpu_suspend(struct i2c_client *client, pm_message_t mesg)
 	struct i2c_adapter *accel_adapter;
 	struct i2c_adapter *compass_adapter;
 	struct i2c_adapter *pressure_adapter;
-
+	printk("%s+\n", __func__);
 	accel_adapter = i2c_get_adapter(mldl_cfg->pdata->accel.adapt_num);
 	compass_adapter =
 	    i2c_get_adapter(mldl_cfg->pdata->compass.adapt_num);
@@ -936,6 +941,7 @@ int mpu_suspend(struct i2c_client *client, pm_message_t mesg)
 			"%s: Already suspended %d\n", __func__,
 			mesg.event);
 	}
+	printk("%s-\n", __func__);
 	return 0;
 }
 
@@ -947,7 +953,7 @@ int mpu_resume(struct i2c_client *client)
 	struct i2c_adapter *accel_adapter;
 	struct i2c_adapter *compass_adapter;
 	struct i2c_adapter *pressure_adapter;
-
+	printk("%s+\n", __func__);
 	accel_adapter = i2c_get_adapter(mldl_cfg->pdata->accel.adapt_num);
 	compass_adapter =
 	    i2c_get_adapter(mldl_cfg->pdata->compass.adapt_num);
@@ -967,6 +973,7 @@ int mpu_resume(struct i2c_client *client)
 		dev_dbg(&this_client->adapter->dev,
 			"%s for pid %d\n", __func__, pid);
 	}
+	printk("%s-\n", __func__);
 	return 0;
 }
 

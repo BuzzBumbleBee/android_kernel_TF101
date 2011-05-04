@@ -295,21 +295,11 @@ static void HandleTwoFingerZoom(int finger,int x2_1,int y2_1,int x2_2,int y2_2,s
 	struct elantech_data *etd = ec_chip->private;
 	struct input_dev *dev = etd->abs_dev;
 	int finger2_pressed;
-	finger2_pressed = finger==2;
 	int x_mid, y_mid;
+	finger2_pressed = finger==2;
 
 	input_report_key(dev, BTN_2, finger2_pressed);
 	if(finger==2){
-		x_mid = (x2_1 + x2_2)/2;
-		y_mid = (y2_1 + y2_2)/2;
-
-		input_report_abs(dev, ABS_MT_TRACKING_ID, 1);
-		input_report_abs(dev, ABS_MT_TOUCH_MAJOR, 100);
-		input_report_abs(dev, ABS_MT_WIDTH_MAJOR, 7);
-		input_report_abs(dev, ABS_MT_POSITION_X, x_mid);
-		input_report_abs(dev, ABS_MT_POSITION_Y, y_mid);
-		input_mt_sync(dev);
-
 		
 	/*
 		input_report_abs(dev, ABS_X, x2_1);
@@ -319,21 +309,33 @@ static void HandleTwoFingerZoom(int finger,int x2_1,int y2_1,int x2_2,int y2_2,s
 		input_report_abs(dev, BTN_TOUCH, finger);
 		input_report_abs(dev, ABS_PRESSURE, 100);
 	*/	
-	/*	
-		input_report_abs(dev, ABS_MT_TRACKING_ID, 1);
-		input_report_abs(dev, ABS_MT_TOUCH_MAJOR, 100);
-		input_report_abs(dev, ABS_MT_WIDTH_MAJOR, 7);
-		input_report_abs(dev, ABS_MT_POSITION_X, x2_1);
-		input_report_abs(dev, ABS_MT_POSITION_Y, y2_1);
-		input_mt_sync(dev);
+		if (x2_1 && y2_1 && x2_2 && y2_2){
+			x_mid = (x2_1 + x2_2)/2;
+			y_mid = (y2_1 + y2_2)/2;
+			
+			input_report_abs(dev, ABS_MT_TRACKING_ID, 1);
+			input_report_abs(dev, ABS_MT_TOUCH_MAJOR, 100);
+			input_report_abs(dev, ABS_MT_WIDTH_MAJOR, 7);
+			input_report_abs(dev, ABS_MT_POSITION_X, x_mid);
+			input_report_abs(dev, ABS_MT_POSITION_Y, y_mid);
+			input_mt_sync(dev);
 		
-		input_report_abs(dev, ABS_MT_TRACKING_ID, 2);
-		input_report_abs(dev, ABS_MT_TOUCH_MAJOR, 100);
-		input_report_abs(dev, ABS_MT_WIDTH_MAJOR, 7);
-		input_report_abs(dev, ABS_MT_POSITION_X, x2_2);
-		input_report_abs(dev, ABS_MT_POSITION_Y, y2_2);
-		input_mt_sync(dev);
-	*/
+			/*
+			input_report_abs(dev, ABS_MT_TRACKING_ID, 1);
+			input_report_abs(dev, ABS_MT_TOUCH_MAJOR, 100);
+			input_report_abs(dev, ABS_MT_WIDTH_MAJOR, 7);
+			input_report_abs(dev, ABS_MT_POSITION_X, x2_1);
+			input_report_abs(dev, ABS_MT_POSITION_Y, y2_1);
+			input_mt_sync(dev);
+		
+			input_report_abs(dev, ABS_MT_TRACKING_ID, 2);
+			input_report_abs(dev, ABS_MT_TOUCH_MAJOR, 100);
+			input_report_abs(dev, ABS_MT_WIDTH_MAJOR, 7);
+			input_report_abs(dev, ABS_MT_POSITION_X, x2_2);
+			input_report_abs(dev, ABS_MT_POSITION_Y, y2_2);
+			input_mt_sync(dev);
+			*/
+		}
 		ELAN_INFO("x2_1=%d, y2_1=%d x2_2=%d, y2_2=%d \n",x2_1, y2_1, x2_2, y2_2);
 		
 	}else{
@@ -580,7 +582,7 @@ void elantech_report_absolute_to_related(struct asusec_chip *ec_chip,int *Null_d
 	  if ((last_tap_num != etd->tap_num) && ((last_tap_num == TP_CLICK) || (last_tap_num == TP_DOUBLE_CLICK)))
 		del_timer_sync(&console_timer);
 	  if((last_tap_num != etd->tap_num) && ((etd->tap_num == TP_CLICK) || (etd->tap_num == TP_DOUBLE_CLICK))){
-		mod_timer(&console_timer,jiffies+(HZ * 1/3));
+		mod_timer(&console_timer,jiffies+(HZ * 1/100));
 	  }
 	  else if((etd->tap_num == TP_DRAG || etd->tap_num == TP_DRAG_MOVE) && finger == 1){
 		input_report_key(dev, BTN_LEFT,1);

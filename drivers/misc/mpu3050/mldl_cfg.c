@@ -1558,6 +1558,115 @@ int mpu3050_suspend(struct mldl_cfg *mldl_cfg,
 	return result;
 }
 
+/**
+ *  @brief  shutdown the MPU3050 device and all the other sensor
+ *          devices into their low power state.
+ *  @param  gyro_handle
+ *              the main file handle to the MPU3050 device.
+ *  @param  accel_handle
+ *              an handle to the accelerometer device, if sitting
+ *              onto a separate bus. Can match gyro_handle if
+ *              the accelerometer device operates on the same
+ *              primary bus of MPU.
+ *  @param  compass_handle
+ *              an handle to the compass device, if sitting
+ *              onto a separate bus. Can match gyro_handle if
+ *              the compass device operates on the same
+ *              primary bus of MPU.
+ *  @param  pressure_handle
+ *              an handle to the pressure sensor device, if sitting
+ *              onto a separate bus. Can match gyro_handle if
+ *              the pressure sensor device operates on the same
+ *              primary bus of MPU.
+ *  @param  accel
+ *              whether suspending the accelerometer device is
+ *              actually needed (if the device supports low power
+ *              mode of some sort).
+ *  @param  compass
+ *              whether suspending the compass device is
+ *              actually needed (if the device supports low power
+ *              mode of some sort).
+ *  @param  pressure
+ *              whether suspending the pressure sensor device is
+ *              actually needed (if the device supports low power
+ *              mode of some sort).
+ *  @return  ML_SUCCESS or a non-zero error code.
+ */
+int mpu3050_shutdown(struct mldl_cfg *mldl_cfg,
+		    void *gyro_handle,
+		    void *accel_handle,
+		    void *compass_handle,
+		    void *pressure_handle,
+		    bool suspend_gyro,
+		    bool suspend_accel,
+		    bool suspend_compass,
+		    bool suspend_pressure)
+{
+	int result = ML_SUCCESS;
+
+	if (suspend_gyro && !mldl_cfg->gyro_is_suspended) {
+#ifdef M_HW
+		return ML_SUCCESS;
+		/* This puts the bus into bypass mode */
+		result = MLDLSetI2CBypass(mldl_cfg, gyro_handle, 1);
+		ERROR_CHECK(result);
+		result = mpu60xx_pwr_mgmt(mldl_cfg, gyro_handle, 0, SLEEP);
+#else
+		result = MLDLPowerMgmtMPU(mldl_cfg, gyro_handle,
+					RESET, SLEEP, 0, 0, 0);
+#endif
+		ERROR_CHECK(result);
+	}
+
+	if (!mldl_cfg->accel_is_suspended && suspend_accel &&
+	    mldl_cfg->accel && mldl_cfg->accel->suspend) {
+		if (!mldl_cfg->gyro_is_suspended &&
+		    EXT_SLAVE_BUS_SECONDARY == mldl_cfg->pdata->accel.bus) {
+			result = mpu_set_slave(mldl_cfg, gyro_handle,
+					       NULL, NULL);
+			ERROR_CHECK(result);
+		}
+		result = mldl_cfg->accel->suspend(accel_handle,
+						  mldl_cfg->accel,
+						  &mldl_cfg->pdata->accel);
+		ERROR_CHECK(result);
+		mldl_cfg->accel_is_suspended = TRUE;
+	}
+
+	if (!mldl_cfg->compass_is_suspended && suspend_compass &&
+	    mldl_cfg->compass && mldl_cfg->compass->suspend) {
+		if (!mldl_cfg->gyro_is_suspended &&
+		    EXT_SLAVE_BUS_SECONDARY == mldl_cfg->pdata->compass.bus) {
+			result = mpu_set_slave(mldl_cfg, gyro_handle,
+					       NULL, NULL);
+			ERROR_CHECK(result);
+		}
+		result = mldl_cfg->compass->suspend(compass_handle,
+						    mldl_cfg->compass,
+						    &mldl_cfg->
+						    pdata->compass);
+		ERROR_CHECK(result);
+		mldl_cfg->compass_is_suspended = TRUE;
+	}
+
+	if (!mldl_cfg->pressure_is_suspended && suspend_pressure &&
+	    mldl_cfg->pressure && mldl_cfg->pressure->suspend) {
+		if (!mldl_cfg->gyro_is_suspended &&
+		    EXT_SLAVE_BUS_SECONDARY == mldl_cfg->pdata->pressure.bus) {
+			result = mpu_set_slave(mldl_cfg, gyro_handle,
+					       NULL, NULL);
+			ERROR_CHECK(result);
+		}
+		result = mldl_cfg->pressure->suspend(pressure_handle,
+						    mldl_cfg->pressure,
+						    &mldl_cfg->
+						    pdata->pressure);
+		ERROR_CHECK(result);
+		mldl_cfg->pressure_is_suspended = TRUE;
+	}
+	return result;
+}
+
 
 /**
  *  @brief  read raw sensor data from the accelerometer device

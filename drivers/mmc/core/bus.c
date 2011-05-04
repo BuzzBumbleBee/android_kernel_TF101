@@ -294,8 +294,6 @@ void mmc_remove_card(struct mmc_card *card)
 	mmc_remove_card_debugfs(card);
 #endif
 
-       if(card->type == MMC_TYPE_SD)
-              msleep(1);
 	if (mmc_card_present(card)) {
 		if (mmc_host_is_spi(card->host)) {
 			printk(KERN_INFO "%s: SPI card removed\n",

@@ -21,5 +21,11 @@
 #define GPIO_Enable_RF_PIN   TEGRA_GPIO_PD1
 #define GPIO_3G_Reset_PIN    TEGRA_GPIO_PD0
 #define GPIO_SAR_DET_3G      TEGRA_GPIO_PG1
+#define GPIO_SIM_PIN         TEGRA_GPIO_PC7
+#define GPIO_MODEM_WAKEUP    TEGRA_GPIO_PQ6
+
+#define NAME_SIM "sim_plug"
+
+extern int tegra_set_lp0_wake_type(int irq, int flow_type);
 
 #endif

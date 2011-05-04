@@ -559,9 +559,9 @@ static void ep0_setup(struct fsl_udc *udc)
 	/* the intialization of an ep includes: fields in QH, Regs,
 	 * fsl_ep struct */
 	struct_ep_qh_setup(udc, 0, USB_RECV, USB_ENDPOINT_XFER_CONTROL,
-			USB_MAX_CTRL_PAYLOAD, 0, 0);
+			USB_MAX_CTRL_PAYLOAD, 1, 0);
 	struct_ep_qh_setup(udc, 0, USB_SEND, USB_ENDPOINT_XFER_CONTROL,
-			USB_MAX_CTRL_PAYLOAD, 0, 0);
+			USB_MAX_CTRL_PAYLOAD, 1, 0);
 	dr_ep_setup(0, USB_RECV, USB_ENDPOINT_XFER_CONTROL);
 	dr_ep_setup(0, USB_SEND, USB_ENDPOINT_XFER_CONTROL);
 
@@ -3052,9 +3052,11 @@ static int __exit fsl_udc_remove(struct platform_device *pdev)
  -----------------------------------------------------------------*/
 static int fsl_udc_suspend(struct platform_device *pdev, pm_message_t state)
 {
+    printk("fsl_udc_suspend+\n");
     if (udc_controller->transceiver) {
         if (udc_controller->transceiver->state != OTG_STATE_B_PERIPHERAL) {
             /* we are not in device mode, return */
+            printk("fsl_udc_suspend-\n");
             return 0;
         }
     }
@@ -3072,6 +3074,7 @@ static int fsl_udc_suspend(struct platform_device *pdev, pm_message_t state)
         udc_controller->transceiver->state = OTG_STATE_UNDEFINED;
     }
     fsl_udc_clk_suspend();
+    printk("fsl_udc_suspend-\n");
     return 0;
 }
 
@@ -3081,9 +3084,11 @@ static int fsl_udc_suspend(struct platform_device *pdev, pm_message_t state)
  *-----------------------------------------------------------------*/
 static int fsl_udc_resume(struct platform_device *pdev)
 {
+    printk("fsl_udc_resume+\n");
     if (udc_controller->transceiver) {
         if (!(fsl_readl(&usb_sys_regs->vbus_wakeup) & USB_SYS_ID_PIN_STATUS)) {
             /* If ID status is low means host is connected, return */
+            printk("fsl_udc_resume-\n");
             return 0;
         }
         /* enable clock and check for VBUS */
@@ -3091,6 +3096,7 @@ static int fsl_udc_resume(struct platform_device *pdev)
         if (!(fsl_readl(&usb_sys_regs->vbus_wakeup) & USB_SYS_VBUS_STATUS)) {
             /* if there is no VBUS then power down the clocks and return */
             fsl_udc_clk_suspend();
+            printk("fsl_udc_resume-\n");
             return 0;
         } else {
             /* Detected VBUS set the transceiver state to device mode */
@@ -3120,6 +3126,7 @@ static int fsl_udc_resume(struct platform_device *pdev)
     if (!(fsl_readl(&usb_sys_regs->vbus_wakeup) & USB_SYS_VBUS_STATUS))
         fsl_udc_clk_suspend();
 
+    printk("fsl_udc_resume-\n");
     return 0;
 }
 

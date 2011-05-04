@@ -634,7 +634,8 @@ static int gpio_keys_suspend(struct device *dev)
 	struct platform_device *pdev = to_platform_device(dev);
 	struct gpio_keys_platform_data *pdata = pdev->dev.platform_data;
 	int i;
-       
+
+	printk("gpio_keys_suspend+\n");
 	if (device_may_wakeup(&pdev->dev)) {
 		for (i = 0; i < pdata->nbuttons; i++) {
 			struct gpio_keys_button *button = &pdata->buttons[i];
@@ -644,7 +645,8 @@ static int gpio_keys_suspend(struct device *dev)
 			}
 		}
 	}
-       flush_workqueue(gpiokey_workqueue);
+	flush_workqueue(gpiokey_workqueue);
+	printk("gpio_keys_suspend-\n");
 	return 0;
 }
 
@@ -656,6 +658,7 @@ static int gpio_keys_resume(struct device *dev)
 	int wakeup_key = KEY_RESERVED;
 	int i;
 
+	printk("gpio_keys_resume+\n");
 	if (pdata->wakeup_key)
 		wakeup_key = pdata->wakeup_key();
 
@@ -678,6 +681,7 @@ static int gpio_keys_resume(struct device *dev)
 		gpio_keys_report_event(&ddata->data[i]);
 	}
 	input_sync(ddata->input);
+	printk("gpio_keys_resume-\n");
 
 	return 0;
 }

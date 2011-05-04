@@ -30,6 +30,8 @@
 
 #include "sdhci.h"
 
+#include "../debug_mmc.h"
+
 #define DRIVER_NAME    "sdhci-tegra"
 
 #define SDHCI_VENDOR_CLOCK_CNTRL       0x100
@@ -47,7 +49,7 @@ static irqreturn_t carddetect_irq(int irq, void *data)
 {
 	struct sdhci_host *sdhost = (struct sdhci_host *)data;
 
-	sdhci_card_detect_callback(sdhost);
+	tasklet_schedule(&sdhost->card_tasklet);
 	return IRQ_HANDLED;
 };
 
@@ -278,6 +280,9 @@ static int tegra_sdhci_suspend(struct platform_device *pdev, pm_message_t state)
 {
 	struct tegra_sdhci_host *host = platform_get_drvdata(pdev);
 	int ret = 0;
+
+	MMC_printk("%s:+", mmc_hostname(host->sdhci->mmc));
+
        if ((host->card_always_on && is_card_sdio(host->sdhci->mmc->card)) || is_card_mmc(host->sdhci->mmc->card)){
 		int div = 0;
 		u16 clk;
@@ -313,6 +318,8 @@ static int tegra_sdhci_suspend(struct platform_device *pdev, pm_message_t state)
 		pr_err("%s: failed, error = %d\n", __func__, ret);
 
 	tegra_sdhci_enable_clock(host, 0);
+
+	MMC_printk("%s:-", mmc_hostname(host->sdhci->mmc));
 	return ret;
 }
 
@@ -320,6 +327,8 @@ static int tegra_sdhci_resume(struct platform_device *pdev)
 {
 	struct tegra_sdhci_host *host = platform_get_drvdata(pdev);
 	int ret;
+
+	MMC_printk("%s:+", mmc_hostname(host->sdhci->mmc));
 
 	if ((host->card_always_on && is_card_sdio(host->sdhci->mmc->card))||is_card_mmc(host->sdhci->mmc->card)) {
 		int ret = 0;
@@ -347,6 +356,7 @@ static int tegra_sdhci_resume(struct platform_device *pdev)
 	if (ret)
 		pr_err("%s: failed, error = %d\n", __func__, ret);
 
+	MMC_printk("%s:-", mmc_hostname(host->sdhci->mmc));
 	return ret;
 }
 #else

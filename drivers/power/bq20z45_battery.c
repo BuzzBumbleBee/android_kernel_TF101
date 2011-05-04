@@ -160,12 +160,10 @@ void check_cabe_type(void)
       if(battery_cable_status == USB_AC_Adapter){
 		 ac_on = 1 ;
 	        usb_on = 0;
-		 pseudo_suspend_charging_on=0;
 	}
 	else if(battery_docking_status){
 		 ac_on = 1 ;
 	        usb_on = 0;
-		 pseudo_suspend_charging_on=0;
 	}
 	else if(battery_cable_status  == USB_Cable){
 		ac_on = 0 ;
@@ -174,7 +172,6 @@ void check_cabe_type(void)
 	else{
 		ac_on = 0 ;
 		usb_on = 0;
-		pseudo_suspend_charging_on=0;
 	}
 }
 static int bq20z45_get_property(struct power_supply *psy,
@@ -1115,19 +1112,16 @@ void pseudo_suspend_charging_mode_en(int enable)
 		gpio_set_value(TEGRA_GPIO_PS5, LIMIT_IC_DIS);
        charge_ic_enable(enable);
 }
-int disable_touch_power = 0;
 int battery_charger_callback(unsigned int enable)
 {
     check_cabe_type();
     printk("battery_charger_callback  usb_on=%u enable=%u \n",usb_on,enable);
-    if ( (!usb_on) && (!disable_touch_power) )
+    if ( (!usb_on) && (!pseudo_suspend_charging_on) )
 		return 0;
     if(enable){
 		pseudo_suspend_charging_on=true;
-		disable_touch_power = 1;
 		pseudo_suspend_charging_mode_en(true);
     }else{
-		disable_touch_power = 0;
     	       pseudo_suspend_charging_on=false;
 		pseudo_suspend_charging_mode_en(false);
     }

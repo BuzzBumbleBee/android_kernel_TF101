@@ -41,7 +41,11 @@
 #include <asm/system.h>
 #include <asm/uaccess.h>
 
+#include <linux/gpio.h>
+
 #include "queue.h"
+
+#include "../debug_mmc.h"
 
 MODULE_ALIAS("mmc:block");
 
@@ -316,6 +320,10 @@ static int mmc_blk_issue_rw_rq(struct mmc_queue *mq, struct request *req)
 	mmc_claim_host(card->host);
 
 	do {
+		if (mmc_card_sd(card) && gpio_get_value(SD_CARD_DETECT) == 1) {
+			MMC_printk("No card, stop read or write");
+			goto cmd_err;
+		}
 		struct mmc_command cmd;
 		u32 readcmd, writecmd, status = 0;
 
@@ -398,6 +406,9 @@ static int mmc_blk_issue_rw_rq(struct mmc_queue *mq, struct request *req)
 
 		mmc_queue_bounce_pre(mq);
 
+		if (mmc_card_sd(card) && gpio_get_value(SD_CARD_DETECT) == 1)
+			goto cmd_err;
+
 		mmc_wait_for_req(card->host, &brq.mrq);
 
 		mmc_queue_bounce_post(mq);
@@ -408,6 +419,8 @@ static int mmc_blk_issue_rw_rq(struct mmc_queue *mq, struct request *req)
 		 * programming mode even when things go wrong.
 		 */
 		if (brq.cmd.error || brq.data.error || brq.stop.error) {
+			MMC_printk("%s:cmd_type %d, clock %uHZ, Vdd %u, powermode %u", mmc_hostname(card->host), rq_data_dir(req), (card->host->ios).clock, (card->host->ios).vdd, (card->host->ios).power_mode);
+
 			if (brq.data.blocks > 1 && rq_data_dir(req) == READ) {
 				/* Redo read one sector at a time */
 				printk(KERN_WARNING "%s: retrying using single "
@@ -415,6 +428,8 @@ static int mmc_blk_issue_rw_rq(struct mmc_queue *mq, struct request *req)
 				disable_multi = 1;
 				continue;
 			}
+			if (mmc_card_sd(card) && gpio_get_value(SD_CARD_DETECT) == 1)
+				goto cmd_err;
 			status = get_card_status(card, req);
 		} else if (disable_multi == 1) {
 			disable_multi = 0;

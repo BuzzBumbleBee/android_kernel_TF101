@@ -1010,7 +1010,8 @@ int tegra_nvhdcp_set_policy(struct tegra_nvhdcp *nvhdcp, int pol)
 	return 0;
 }
 
-static int tegra_nvhdcp_renegotiate(struct tegra_nvhdcp *nvhdcp)
+int tegra_nvhdcp_renegotiate(struct tegra_nvhdcp *nvhdcp)
+
 {
 	atomic_set(&nvhdcp->state, STATE_RENEGOTIATE);
 	tegra_nvhdcp_on(nvhdcp);

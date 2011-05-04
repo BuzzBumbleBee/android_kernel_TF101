@@ -516,24 +516,6 @@ extern int register_pm_notifier(struct notifier_block *nb);
 extern int unregister_pm_notifier(struct notifier_block *nb);
 #endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined(CONFIG_PM_SLEEP) */
 
-
-static int dhd_reboot_callback(struct notifier_block *nfb, unsigned long action, void *ignored)
-{
-	if((action == SYS_POWER_OFF) || (action == SYS_DOWN)){
-#if defined(CUSTOMER_HW2) && defined(CONFIG_WIFI_CONTROL_FUNC)
-		wifi_del_dev();
-#endif
-	}
-	return NOTIFY_DONE;
-}
-
-static struct notifier_block dhd_reboot_notifier = {
-	.notifier_call = dhd_reboot_callback,
-	.priority = 0
-};
-extern int register_reboot_notifier(struct notifier_block *nb);
-extern int unregister_reboot_notifier(struct notifier_block *nb);
-
 static void dhd_set_packet_filter(int value, dhd_pub_t *dhd)
 {
 #ifdef PKT_FILTER_SUPPORT
@@ -570,7 +552,7 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 
 	if (dhd && dhd->up) {
 		if (value && dhd->in_suspend) {
-
+			printk("Wi-Fi early-suspend+\n");
 			/* Kernel suspended */
 			DHD_TRACE(("%s: force extra Suspend setting \n", __FUNCTION__));
 
@@ -593,9 +575,9 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 			bcm_mkiovar("roam_off", (char *)&roamvar, 4, iovbuf, sizeof(iovbuf));
 			dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
 #endif /* CUSTOMER_HW2 */
-
+			printk("Wi-Fi early-suspend-\n");
 		} else {
-
+			printk("Wi-Fi late-resume+\n");
 			/* Kernel resumed  */
 			DHD_TRACE(("%s: Remove extra suspend setting \n", __FUNCTION__));
 
@@ -616,6 +598,7 @@ static int dhd_set_suspend(int value, dhd_pub_t *dhd)
 			bcm_mkiovar("roam_off", (char *)&roamvar, 4, iovbuf, sizeof(iovbuf));
 			dhdcdc_set_ioctl(dhd, 0, WLC_SET_VAR, iovbuf, sizeof(iovbuf));
 #endif /* CUSTOMER_HW2 */
+			printk("Wi-Fi late-resume-\n");
 		}
 	}
 
@@ -2184,8 +2167,6 @@ dhd_attach(osl_t *osh, struct dhd_bus *bus, uint bus_hdrlen)
 	register_pm_notifier(&dhd_sleep_pm_notifier);
 #endif /*  (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined(CONFIG_PM_SLEEP) */
 
-	register_reboot_notifier(&dhd_reboot_notifier);
-
 #ifdef CONFIG_HAS_WAKELOCK
 	wake_lock_init(&dhd->pub.wow_wakelock, WAKE_LOCK_SUSPEND, "wow_wake_lock");
 #endif
@@ -2552,9 +2533,6 @@ dhd_detach(dhd_pub_t *dhdp)
 #if (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined(CONFIG_PM_SLEEP)
 			unregister_pm_notifier(&dhd_sleep_pm_notifier);
 #endif /* (LINUX_VERSION_CODE >= KERNEL_VERSION(2, 6, 27)) && defined(CONFIG_PM_SLEEP) */
-
-			unregister_reboot_notifier(&dhd_reboot_notifier);
-
 			free_netdev(ifp->net);
 #ifdef CONFIG_HAS_WAKELOCK
 			wake_lock_destroy(&dhd->wl_wifi);
