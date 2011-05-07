@@ -2179,9 +2179,15 @@ static struct tegra_sku_rate_limit sku_limits[] =
 	RATE_LIMIT("cclk",	750000000, 0x07, 0x10),
 	RATE_LIMIT("pll_x",	750000000, 0x07, 0x10),
 
+#ifdef CONFIG_TEGRA_OC
 	RATE_LIMIT("cpu",	1200000000, 0x04, 0x08, 0x0F),
 	RATE_LIMIT("cclk",	1200000000, 0x04, 0x08, 0x0F),
 	RATE_LIMIT("pll_x",	1200000000, 0x04, 0x08, 0x0F),
+#else
+	RATE_LIMIT("cpu",	1000000000, 0x04, 0x08, 0x0F),
+	RATE_LIMIT("cclk",	1000000000, 0x04, 0x08, 0x0F),
+	RATE_LIMIT("pll_x",	1000000000, 0x04, 0x08, 0x0F),
+#endif
 
 	RATE_LIMIT("cpu",	1200000000, 0x14, 0x17, 0x18, 0x1B, 0x1C),
 	RATE_LIMIT("cclk",	1200000000, 0x14, 0x17, 0x18, 0x1B, 0x1C),
