@@ -2301,11 +2301,10 @@ static struct cpufreq_frequency_table freq_table_1p2GHz[] = {
 	{ 2, 456000 },
 	{ 3, 608000 },
 	{ 4, 760000 },
-	{ 5, 816000 },
-	{ 6, 912000 },
-	{ 7, 1000000 },
-	{ 8, 1200000 },
-	{ 9, CPUFREQ_TABLE_END },
+	{ 5, 912000 },
+	{ 6, 1000000 },
+	{ 7, 1200000 },
+	{ 8, CPUFREQ_TABLE_END },
 };
 
 static struct tegra_cpufreq_table_data cpufreq_tables[] = {
