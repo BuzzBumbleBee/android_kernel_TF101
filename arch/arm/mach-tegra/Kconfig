@@ -69,6 +69,10 @@ config TEGRA_OC
 	bool "Enable 1.2Ghz Overclock"
 	default n
 
+config VENTANA_USB_MASS_STORAGE
+	bool "Enable Mass Storage"
+	default n
+
 config TEGRA_PWM
 	tristate "Enable PWM driver"
 	select HAVE_PWM
