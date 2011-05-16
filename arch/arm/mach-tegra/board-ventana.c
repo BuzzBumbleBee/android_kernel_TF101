@@ -272,7 +272,7 @@ static __initdata struct tegra_clk_init_table ventana_clk_init_table[] = {
 /* ASUS vendor ID */
 #define USB_VENDOR_ID			0x0B05
 
-#ifdef CONFIG_USB_MASS_STORAGE
+#ifdef CONFIG_VENTANA_USB_MASS_STORAGE
 static char *usb_functions_mtp_ums[] = { "mtp", "usb_mass_storage" };
 static char *usb_functions_mtp_adb_ums[] = { "mtp", "adb", "usb_mass_storage" };
 #else
@@ -290,7 +290,7 @@ static char *usb_functions_all[] = {
 #endif
 	"mtp",
 	"adb",
-#ifdef CONFIG_USB_MASS_STORAGE
+#ifdef CONFIG_VENTANA_USB_MASS_STORAGE
 	"usb_mass_storage"
 #endif
 };
